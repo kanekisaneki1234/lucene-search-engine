@@ -1,0 +1,5 @@
+com/lucene/search/CranfieldSearcher$SearchResult.class
+com/lucene/search/App.class
+com/lucene/search/CranfieldIndexer.class
+com/lucene/search/CranfieldSearcher.class
+com/lucene/search/CranfieldDocument.class
