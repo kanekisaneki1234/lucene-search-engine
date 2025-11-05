@@ -1,10 +1,10 @@
 package com.lucene.search;
 
 public class CranfieldDocument {
-    private String id;
-    private String title;
-    private String author;
-    private String content;
+    private final String id;
+    private final String title;
+    private final String author;
+    private final String content;
 
     public CranfieldDocument(String id, String title, String author, String content) {
         this.id = id;

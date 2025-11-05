@@ -1,74 +1,84 @@
 package com.lucene.search;
 
 import org.apache.lucene.analysis.Analyzer;
+// import org.apache.lucene.analysis.en.EnglishAnalyzer;
+import org.apache.lucene.document.Document;
 import org.apache.lucene.index.DirectoryReader;
-import org.apache.lucene.index.IndexReader;
-import org.apache.lucene.queryparser.classic.QueryParser;
-import org.apache.lucene.search.IndexSearcher;
-import org.apache.lucene.search.Query;
-import org.apache.lucene.search.ScoreDoc;
-import org.apache.lucene.search.TopDocs;
-import org.apache.lucene.store.Directory;
+import org.apache.lucene.queryparser.classic.MultiFieldQueryParser;
+import org.apache.lucene.queryparser.classic.ParseException;
+import org.apache.lucene.search.*;
+import org.apache.lucene.search.similarities.Similarity;
 import org.apache.lucene.store.FSDirectory;
 
+import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class CranfieldSearcher {
-    private String indexPath;
-    private Analyzer analyzer;
-    private IndexSearcher searcher;
 
-    public CranfieldSearcher(String indexPath, Analyzer analyzer) throws Exception {
-        this.indexPath = indexPath;
+    private final IndexSearcher searcher;
+    private final Analyzer analyzer;
+
+    public CranfieldSearcher(String indexDir, Analyzer analyzer) throws IOException {
         this.analyzer = analyzer;
-        
-        Directory directory = FSDirectory.open(Paths.get(indexPath));
-        IndexReader reader = DirectoryReader.open(directory);
-        this.searcher = new IndexSearcher(reader);
+        this.searcher = new IndexSearcher(DirectoryReader.open(FSDirectory.open(Paths.get(indexDir))));
     }
 
-    /**
-     * Search using a simple query string
-     * @param queryString Query text
-     * @param topK Number of top results to return
-     * @return List of search results
-     * @throws Exception
-     */
-    public List<SearchResult> search(String queryString, int topK) throws Exception {
-        QueryParser parser = new QueryParser("content", analyzer);
-        Query query = parser.parse(queryString);
-        
-        TopDocs results = searcher.search(query, topK);
-        List<SearchResult> searchResults = new ArrayList<>();
+    public void setSimilarity(Similarity similarity) {
+        searcher.setSimilarity(similarity);
+        System.out.println("Similarity set to: " + similarity.getClass().getSimpleName());
+    }
 
-        for (ScoreDoc scoreDoc : results.scoreDocs) {
-            org.apache.lucene.document.Document doc = searcher.storedFields().document(scoreDoc.doc);
-            searchResults.add(new SearchResult(
-                doc.get("id"),
-                doc.get("title"),
-                scoreDoc.score
-            ));
+    public List<SearchResult> search(String queryString, int maxHits) {
+        List<SearchResult> results = new ArrayList<>();
+
+        try {
+            Map<String, Float> boosts = new HashMap<>();
+            boosts.put("title", 3.0f);
+            boosts.put("content", 1.0f);
+            boosts.put("author", 0.5f);
+
+            MultiFieldQueryParser parser = new MultiFieldQueryParser(
+                    new String[]{"title", "content", "author"}, analyzer, boosts
+            );
+
+            Query query = parser.parse(queryString);
+
+            TopDocs topDocs = searcher.search(query, maxHits);
+
+            for (ScoreDoc scoreDoc : topDocs.scoreDocs) {
+                Document doc = searcher.storedFields().document(scoreDoc.doc);
+                results.add(new SearchResult(
+                        doc.get("docId"),
+                        doc.get("title"),
+                        scoreDoc.score
+                ));
+            }
+
+        } catch (ParseException | IOException e) {
+            System.err.println("Error while searching '" + queryString + "': " + e.getMessage());
         }
 
-        return searchResults;
+        return results;
     }
 
     public static class SearchResult {
-        public String id;
-        public String title;
-        public float score;
+        public final String docId;
+        public final String title;
+        public final float score;
 
-        public SearchResult(String id, String title, float score) {
-            this.id = id;
+        public SearchResult(String docId, String title, float score) {
+            this.docId = docId;
             this.title = title;
             this.score = score;
         }
 
         @Override
         public String toString() {
-            return "ID: " + id + ", Title: " + title + ", Score: " + score;
+            return String.format("[DocID: %s] %s (Score: %.4f)", docId, title, score);
         }
     }
 }

@@ -1,7 +1,6 @@
 package com.lucene.search;
 
 import org.apache.lucene.analysis.Analyzer;
-import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.apache.lucene.document.Document;
 import org.apache.lucene.document.Field;
 import org.apache.lucene.document.StringField;
@@ -15,6 +14,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.StringReader;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
@@ -30,23 +30,17 @@ public class CranfieldIndexer {
         this.analyzer = analyzer;
     }
 
-    /**
-     * Indexes the Cranfield Collection
-     * @throws IOException
-     */
     public void indexCranfieldCollection() throws IOException {
         Directory directory = FSDirectory.open(Paths.get(indexPath));
         IndexWriterConfig config = new IndexWriterConfig(analyzer);
         config.setOpenMode(IndexWriterConfig.OpenMode.CREATE);
 
-        IndexWriter writer = new IndexWriter(directory, config);
-        
-        try {
+        try (IndexWriter writer = new IndexWriter(directory, config)) {
             List<CranfieldDocument> documents = parseCranfieldCollection();
             
             for (CranfieldDocument doc : documents) {
                 Document luceneDoc = new Document();
-                luceneDoc.add(new StringField("id", doc.getId(), Field.Store.YES));
+                luceneDoc.add(new StringField("docId", doc.getId(), Field.Store.YES)); 
                 luceneDoc.add(new TextField("title", doc.getTitle(), Field.Store.YES));
                 luceneDoc.add(new TextField("author", doc.getAuthor(), Field.Store.YES));
                 luceneDoc.add(new TextField("content", doc.getContent(), Field.Store.YES));
@@ -55,15 +49,11 @@ public class CranfieldIndexer {
             }
             
             System.out.println("Indexed " + documents.size() + " documents");
-        } finally {
-            writer.close();
         }
     }
 
     /**
      * Parses the Cranfield Collection SGML format
-     * @return List of CranfieldDocument objects
-     * @throws IOException
      */
     private List<CranfieldDocument> parseCranfieldCollection() throws IOException {
         List<CranfieldDocument> documents = new ArrayList<>();
@@ -73,14 +63,13 @@ public class CranfieldIndexer {
             throw new IOException("Cranfield collection file not found: " + file.getAbsolutePath());
         }
 
-        BufferedReader reader = new BufferedReader(new FileReader(file));
         StringBuilder currentContent = new StringBuilder();
-        String line;
-
-        while ((line = reader.readLine()) != null) {
-            currentContent.append(line).append("\n");
+        try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                currentContent.append(line).append("\n");
+            }
         }
-        reader.close();
 
         String content = currentContent.toString();
         String[] entries = content.split("\\.I ");
@@ -95,54 +84,52 @@ public class CranfieldIndexer {
         return documents;
     }
 
-    /**
-     * Parses individual Cranfield entry
-     */
     private CranfieldDocument parseCranfieldEntry(String entry) {
-        try {
-            String id = "";
-            String title = "";
-            String author = "";
-            String content = "";
+        String id = "";
+        StringBuilder title = new StringBuilder();
+        StringBuilder author = new StringBuilder();
+        StringBuilder content = new StringBuilder();
 
-            String[] lines = entry.split("\n");
-            if (lines.length == 0) return null;
-
-            id = lines[0].trim();
+        try (BufferedReader reader = new BufferedReader(new StringReader(entry))) {
+            id = reader.readLine().trim();
             
-            StringBuilder currentField = new StringBuilder();
-            String currentTag = "";
+            String line;
+            char currentTag = ' ';
 
-            for (int i = 1; i < lines.length; i++) {
-                String line = lines[i];
-                
+            while ((line = reader.readLine()) != null) {
                 if (line.startsWith(".T")) {
-                    currentTag = "title";
+                    currentTag = 'T';
                 } else if (line.startsWith(".A")) {
-                    currentTag = "author";
+                    currentTag = 'A';
                 } else if (line.startsWith(".W")) {
-                    currentTag = "content";
+                    currentTag = 'W';
                 } else if (line.startsWith(".B") || line.startsWith(".X")) {
-                    currentTag = "";
+                    currentTag = ' ';
                 } else {
-                    if (!currentTag.isEmpty()) {
-                        currentField.append(line).append(" ");
+                    switch (currentTag) {
+                        case 'T':
+                            title.append(line).append(" ");
+                            break;
+                        case 'A':
+                            author.append(line).append(" ");
+                            break;
+                        case 'W':
+                            content.append(line).append(" ");
+                            break;
                     }
                 }
-
-                if (currentTag.equals("title") && (line.startsWith(".A") || i == lines.length - 1)) {
-                    title = currentField.toString().trim();
-                    currentField = new StringBuilder();
-                } else if (currentTag.equals("author") && (line.startsWith(".W") || i == lines.length - 1)) {
-                    author = currentField.toString().trim();
-                    currentField = new StringBuilder();
-                } else if (currentTag.equals("content") && (line.startsWith(".B") || line.startsWith(".X") || i == lines.length - 1)) {
-                    content = currentField.toString().trim();
-                }
             }
+            
+            return new CranfieldDocument(
+                id, 
+                title.toString().trim(), 
+                author.toString().trim(), 
+                content.toString().trim()
+            );
 
-            return new CranfieldDocument(id, title, author, content);
         } catch (Exception e) {
+            System.err.println("Error parsing entry starting with ID: " + id);
+            e.printStackTrace();
             return null;
         }
     }
