@@ -1,0 +1,28 @@
+LUCENE SEARCH ENGINE - BATCH EVALUATION REPORT
+======================================================================
+Generated: 2025-10-21 15:14:36
+Total Queries: 225
+Collection: Cranfield Collection
+Top-K Results: 100
+======================================================================
+
+VECTOR SPACE MODEL (TF-IDF)
+----------------------------------------------------------------------
+Mean Average Precision (MAP): 0.0023
+Mean Recall: 0.0280
+Mean Precision@10: 0.0013
+Mean NDCG@10: 0.0009
+
+BM25
+----------------------------------------------------------------------
+Mean Average Precision (MAP): 0.0023
+Mean Recall: 0.0271
+Mean Precision@10: 0.0018
+Mean NDCG@10: 0.0019
+
+COMPARATIVE ANALYSIS
+----------------------------------------------------------------------
+MAP Improvement (BM25): +4.34%
+Recall Improvement (BM25): -3.29%
+
+Conclusion: BM25 outperforms Vector Space Model on this collection.
